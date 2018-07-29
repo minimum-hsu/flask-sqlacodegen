@@ -126,7 +126,11 @@ def _render_column_type(coltype):
             else:
                 args.append(repr(value))
 
-    text = _flask_prepend + coltype.__class__.__name__
+    coltype_class_name = coltype.__class__.__name__
+    if coltype_class_name == 'ENUM':
+        coltype_class_name = 'Enum'
+
+    text = _flask_prepend + coltype_class_name
     if args:
         text += '({0})'.format(', '.join(args))
 
@@ -653,7 +657,7 @@ class CodeGenerator(object):
 
         # Render the model tables and classes
         for model in self.models:
-            print('\n\n', file=outfile)
+            print('\n', file=outfile)
             print(model.render().rstrip('\n').encode('utf-8'), file=outfile)
 
         if self.footer:

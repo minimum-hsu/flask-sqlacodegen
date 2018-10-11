@@ -475,7 +475,7 @@ class ManyToOneRelationship(Relationship):
         column_names = _get_column_names(constraint)
         colname = column_names[0]
         tablename = constraint.elements[0].column.table.name
-        if not colname.endswith('_id'):
+        if len(constraint.elements) > 1 or not colname.endswith('_id'):
             self.preferred_name = inflect_engine.singular_noun(tablename) or tablename
         else:
             self.preferred_name = colname[:-3]

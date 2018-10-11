@@ -571,6 +571,7 @@ class CodeGenerator(object):
         # Iterate through the tables and create model classes when possible
         self.models = []
         self.collector = ImportCollector()
+        self.collector.add_literal_import('__future__', 'unicode_literals')
         classes = {}
         for table in sorted(metadata.tables.values(), key=lambda t: (t.schema or '', t.name)):
             # Support for Alembic and sqlalchemy-migrate -- never expose the schema version tables
@@ -639,7 +640,6 @@ class CodeGenerator(object):
 
         if self.flask:
             # Add Flask-SQLAlchemy support
-            self.collector.add_literal_import('__future__', 'unicode_literals')
             self.collector.add_literal_import('flask_sqlalchemy', 'SQLAlchemy')
             parent_name = 'db.Model'
 

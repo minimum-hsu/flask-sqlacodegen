@@ -78,7 +78,7 @@ def _get_compiled_expression(statement):
 def _get_constraint_sort_key(constraint):
     if isinstance(constraint, CheckConstraint):
         return 'C{0}'.format(constraint.sqltext)
-    return constraint.__class__.__name__[0] + repr(_get_column_names(constraint))
+    return constraint.__class__.__name__[0] + _render_value(_get_column_names(constraint))
 
 
 def _get_common_fk_constraints(table1, table2):
@@ -103,7 +103,7 @@ def _getargspec_init(method):
 def _render_column_type(coltype):
     args = []
     if isinstance(coltype, Enum):
-        args.extend(repr(arg) for arg in coltype.enums)
+        args.extend(_render_value(arg) for arg in coltype.enums)
         if coltype.name is not None:
             args.append('name={0!r}'.format(coltype.name))
     else:
@@ -122,9 +122,10 @@ def _render_column_type(coltype):
             if value is missing or value == default:
                 use_kwargs = True
             elif use_kwargs:
-                args.append('{0}={1}'.format(attr, repr(value)))
+                args.append('{0}={1}'.format(
+                    attr, _render_value(value)))
             else:
-                args.append(repr(value))
+                args.append(_render_value(value))
 
     coltype_class_name = coltype.__class__.__name__
     if coltype_class_name == 'ENUM':
@@ -135,6 +136,13 @@ def _render_column_type(coltype):
         text += '({0})'.format(', '.join(args))
 
     return text
+
+
+def _render_value(value):
+    if isinstance(value, basestring):
+        return "'%s'" % value
+    else:
+        return repr(value)
 
 
 def _render_column(column, show_name):
@@ -165,18 +173,18 @@ def _render_column(column, show_name):
         server_default = 'server_default=' + _flask_prepend + 'FetchedValue()'
 
     return _flask_prepend + 'Column({0})'.format(', '.join(
-        ([repr(column.name)] if show_name else []) +
+        ([_render_value(column.name)] if show_name else []) +
         ([_render_column_type(column.type)] if render_coltype else []) +
         [_render_constraint(x) for x in dedicated_fks] +
-        [repr(x) for x in column.constraints] +
-        ['{0}={1}'.format(k, repr(getattr(column, k))) for k in kwarg] +
+        [_render_value(x) for x in column.constraints] +
+        ['{0}={1}'.format(k, _render_value(getattr(column, k))) for k in kwarg] +
         ([server_default] if column.server_default else [])
     ))
 
 
 def _render_constraint(constraint):
     def render_fk_options(*opts):
-        opts = [repr(opt) for opt in opts]
+        opts = [_render_value(opt) for opt in opts]
         for attr in 'ondelete', 'onupdate', 'deferrable', 'initially', 'match':
             value = getattr(constraint, attr, None)
             if value:
@@ -195,7 +203,7 @@ def _render_constraint(constraint):
     elif isinstance(constraint, CheckConstraint):
         return _flask_prepend + 'CheckConstraint({0!r})'.format(_get_compiled_expression(constraint.sqltext))
     elif isinstance(constraint, UniqueConstraint):
-        columns = [repr(col.name) for col in constraint.columns]
+        columns = [_render_value(col.name) for col in constraint.columns]
         return _flask_prepend + 'UniqueConstraint({0})'.format(', '.join(columns))
 
 
@@ -215,7 +223,7 @@ def _is_model_descendant(model_a, model_b):
 
 
 def _render_index(index):
-    columns = [repr(col.name) for col in index.columns]
+    columns = [_render_value(col.name) for col in index.columns]
     return _flask_prepend + 'Index({0!r}, {1})'.format(index.name, ', '.join(columns))
 
 
@@ -425,7 +433,7 @@ class Relationship(object):
 
     def render(self):
         text = _flask_prepend + 'relationship('
-        args = [repr(self.target_cls)]
+        args = [_render_value(self.target_cls)]
 
         if 'secondaryjoin' in self.kwargs:
             text += '\n        '
@@ -445,7 +453,7 @@ class Relationship(object):
             backref = original_backref + str('_{0}'.format(suffix))
             suffix += 1
 
-        self.kwargs['backref'] = repr(backref)
+        self.kwargs['backref'] = _render_value(backref)
         # Check if any of the target_cls inherit from other target_cls
         # If so, modify backref name of descendant
         # "backref({0}, lazy='dynamic')".format(repr(backref))
@@ -453,11 +461,11 @@ class Relationship(object):
             if self.target_cls in classes and rel.target_cls in classes:
                 if _is_model_descendant(classes[self.target_cls], classes[rel.target_cls]):
                     self.backref_name = self.target_cls.lower() + '_' + backref
-                    self.kwargs['backref'] = repr(self.backref_name)
+                    self.kwargs['backref'] = _render_value(self.backref_name)
                 if _is_model_descendant(classes[rel.target_cls], classes[self.target_cls]):
                     backref = rel.backref_name
                     rel.backref_name = rel.target_cls.lower() + '_' + backref
-                    rel.kwargs['backref'] = repr(rel.backref_name)
+                    rel.kwargs['backref'] = _render_value(rel.backref_name)
 
 
 class ManyToOneRelationship(Relationship):
@@ -502,7 +510,7 @@ class ManyToManyRelationship(Relationship):
     def __init__(self, source_cls, target_cls, assocation_table, inflect_engine):
         super(ManyToManyRelationship, self).__init__(source_cls, target_cls)
         prefix = assocation_table.schema + '.' if assocation_table.schema is not None else ''
-        self.kwargs['secondary'] = repr(prefix + assocation_table.name)
+        self.kwargs['secondary'] = _render_value(prefix + assocation_table.name)
         constraints = [c for c in assocation_table.constraints if isinstance(c, ForeignKeyConstraint)]
         constraints.sort(key=_get_constraint_sort_key)
         colname = _get_column_names(constraints[1])[0]
@@ -520,9 +528,9 @@ class ManyToManyRelationship(Relationship):
             sec_joins = ['{0}.{1} == {2}.c.{3}'.format(target_cls, elem.column.name, assocation_table.name, col)
                          for col, elem in sec_pairs]
             self.kwargs['primaryjoin'] = (
-                repr('and_({0})'.format(', '.join(pri_joins))) if len(pri_joins) > 1 else repr(pri_joins[0]))
+                _render_value('and_({0})'.format(', '.join(pri_joins))) if len(pri_joins) > 1 else _render_value(pri_joins[0]))
             self.kwargs['secondaryjoin'] = (
-                repr('and_({0})'.format(', '.join(sec_joins))) if len(sec_joins) > 1 else repr(sec_joins[0]))
+                _render_value('and_({0})'.format(', '.join(sec_joins))) if len(sec_joins) > 1 else _render_value(sec_joins[0]))
 
 
 class CodeGenerator(object):
@@ -631,6 +639,7 @@ class CodeGenerator(object):
 
         if self.flask:
             # Add Flask-SQLAlchemy support
+            self.collector.add_literal_import('__future__', 'unicode_literals')
             self.collector.add_literal_import('flask_sqlalchemy', 'SQLAlchemy')
             parent_name = 'db.Model'
 

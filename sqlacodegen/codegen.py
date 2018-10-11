@@ -515,7 +515,11 @@ class ManyToManyRelationship(Relationship):
         constraints.sort(key=_get_constraint_sort_key)
         colname = _get_column_names(constraints[1])[0]
         tablename = constraints[1].elements[0].column.table.name
-        self.preferred_name = tablename if not colname.endswith('_id') else colname[:-3] + 's'
+        if len(constraints[1].elements) > 1 or not colname.endswith('_id'):
+            self.preferred_name = tablename + 's'
+        else:
+            self.preferred_name = colname[:-3] + 's'
+
         self.backref_name = inflect_engine.plural_noun(self.backref_name)
 
         # Handle self referential relationships

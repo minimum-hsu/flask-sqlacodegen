@@ -14,6 +14,8 @@ from sqlalchemy.util import OrderedDict
 from sqlalchemy.types import Boolean, String
 import sqlalchemy
 
+from six import string_types
+
 try:
     from sqlalchemy.sql.expression import text, TextClause
 except ImportError:
@@ -139,7 +141,7 @@ def _render_column_type(coltype):
 
 
 def _render_value(value):
-    if isinstance(value, basestring):
+    if isinstance(value, string_types):
         return "'%s'" % value
     else:
         return repr(value)
@@ -671,7 +673,7 @@ class CodeGenerator(object):
         # Render the model tables and classes
         for model in self.models:
             print('\n', file=outfile)
-            print(model.render().rstrip('\n').encode('utf-8'), file=outfile)
+            print(model.render().rstrip('\n'), file=outfile)
 
         if self.footer:
             print(self.footer, file=outfile)
